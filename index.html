@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+    body { 
+        overflow: hidden;
+        user-select: none;
+        margin: 0;
+    }
+    #canvas {
+        width: 100vw;
+        height: 100vh;
+        background-color: rgb(191, 191, 191);
+        position: absolute;
+    }
+    .toptoolbar{
+        width: 90vw;
+        height: 8vh;
+        position: absolute;
+ 
+        left: 50%;
+
+        display: grid;
+        background-color: rgb(151, 151, 151);
+        border-radius: 0px 0px 10px 10px;
+        transform: translateX(-50%);
+          grid-auto-flow: column;
+                      grid-auto-columns: 7vh;
+                      align-items: center;
+                      padding: 10px;
+                        column-gap: 1vh;
+ top: 0px;
+
+    }
+    .toolbarbutton{
+          display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      height: 7vh;
+      gap: 50px;
+         transform: scale(1);
+      transition: transform(scale) ease-in-out 3s;
+ 
+       
+    }
+    .toolbarbutton:hover{
+        transform: scale(1.1);
+    }
+
+    </style>
+
+    </head>
+    <body>
+        <canvas id="canvas"></canvas>
+        <div class="toptoolbar">
+            <button class="toolbarbutton" id="pencilbutton" onclick="selectedTool='pencil';">pencil</button>
+            <button class="toolbarbutton" id="brushbutton" onclick="selectedTool='brush';">brush</button>
+            <button class="toolbarbutton" id="markerbutton" onclick="selectedTool='marker';">marker</button>
+            <button class="toolbarbutton" id="eraserbutton" onclick="selectedTool='eraser';">eraser</button>
+
+
+            <input id = "color" class="toolbarbutton" type="color"/>
+           <input type="range" id="brushsize" min="0.1" max="30" step="0.5">
+
+
+        </div>
+<script>
+let selectedTool = 'brush';
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext('2d');
+const width = window.innerWidth;
+const height = window.innerHeight;
+
+let brushsize = 1;
+let color;
+
+canvas.width = width;
+canvas.height = height;
+
+function noise(x, y, seed = 0) {
+  return (Math.sin(x * 12.9898 + y * 78.233 + seed * 1000) * 43758.5453) % 1;
+}
+
+let strokeSeed = Math.random(); // unique per mousedown
+let x, y;
+let mousedown = false;
+
+const brushmap = {
+  brush: [
+    [0, 0, 1, 0, 0],
+    [0, 1, 1, 1, 0],
+    [1, 1, 1, 1, 1],
+    [0, 1, 1, 1, 0],
+    [0, 0, 1, 0, 0]
+  ],
+  pencil:[
+    [0, 1, 1, 1, 0],
+    [1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1],
+    [0, 1, 1, 1, 0]
+  ],
+  marker:[
+    [0, 1, 1, 1, 0],
+    [1, 1, 1, 1, 0],
+    [1, 0, 1, 1, 1],
+    [1, 1, 0, 1, 1],
+    [0, 0, 1, 1, 0]
+  ],
+  eraser:[
+    [0, 1, 1, 1, 0],
+    [1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1],
+    [0, 1, 1, 1, 0]
+  ]
+};
+
+const alphaSpeedMap = {
+  brush: 0.6,
+  pencil: 0.5,
+  marker: 0.9,
+  eraser: 1.0 
+};
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (e.deltaY < 0) {
+    brushsize = Math.min(30, brushsize + 0.5);
+  } else {
+    brushsize = Math.max(0.1, brushsize - 0.5);
+  }
+  document.getElementById('brushsize').value = brushsize;
+});
+
+canvas.addEventListener('mousemove', function(event) {
+  x = event.clientX;
+  y = event.clientY;
+  if (mousedown) {
+    strokeSeed = Math.random();
+    draw();
+    sendStroke(x, y, selectedTool, color, brushsize, strokeSeed);
+  }
+});
+
+canvas.addEventListener('mousedown', function(event) {
+  mousedown = true;
+  x = event.clientX;
+  y = event.clientY;
+  strokeSeed = Math.random();
+  draw();
+  sendStroke(x, y, selectedTool, color, brushsize, strokeSeed);
+});
+
+canvas.addEventListener('mouseup', function(event) {
+  mousedown = false;
+});
+
+function hexToRgb(hex) {
+  let bigint = parseInt(hex.replace("#", ""), 16);
+  return {
+    r: (bigint >> 16) & 255,
+    g: (bigint >> 8) & 255,
+    b: bigint & 255
+  };
+}
+
+function drawStrokeFromData(stroke) {
+  const { x, y, tool, color, brushsize, strokeSeed } = stroke;
+  const pixels = brushmap[tool] || brushmap['brush'];
+  const charWidth = pixels[0].length;
+  const charHeight = pixels.length;
+  const rgb = hexToRgb(color);
+
+  for (let r = 0; r < charHeight; r++) {
+    for (let c = 0; c < charWidth; c++) {
+      let shapeNoise = Math.abs(noise(x + c, y + r, strokeSeed));
+      let base = pixels[r][c];
+      let shouldDraw = false;
+
+      if (tool === 'pencil') {
+        shouldDraw = base === 1 && shapeNoise > 0.2;
+      } else if (tool === 'marker') {
+        shouldDraw = base === 1;
+      } else {
+        shouldDraw = (base === 1 && shapeNoise > 0.1) || (base === 0 && shapeNoise > 0.85);
+      }
+
+      if (shouldDraw) {
+        for (let dr = 0; dr < brushsize; dr++) {
+          for (let dc = 0; dc < brushsize; dc++) {
+            const gridRow = y + (r - charHeight / 2) * brushsize + dr;
+            const gridCol = x + (c - charWidth / 2) * brushsize + dc;
+
+            if (tool === 'eraser') {
+              ctx.clearRect(gridCol, gridRow, 1, 1);
+            } else {
+              let speed = alphaSpeedMap[tool] || 0.05;
+              let alpha;
+              if (tool === 'marker') {
+                alpha = 0.9;
+              } else if (tool === 'pencil') {
+                alpha = 0.1 + noise(gridCol * 0.2, gridRow * 0.2, strokeSeed) * 0.2;
+              } else {
+                let noiseVal = Math.abs(noise(gridCol * 0.05, gridRow * 0.05, strokeSeed));
+                alpha = noiseVal * speed;
+              }
+
+              ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+              ctx.fillRect(gridCol, gridRow, 1, 1);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+function draw() {
+  drawStrokeFromData({
+    x,
+    y,
+    tool: selectedTool,
+    color,
+    brushsize,
+    strokeSeed
+  });
+}
+
+function sendStroke(x, y, tool, color, brushsize, strokeSeed) {
+  fetch('https://yourproject.mockapi.io/api/v1/draw', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      x,
+      y,
+      tool,
+      color,
+      brushsize,
+      strokeSeed,
+      timestamp: new Date().toISOString()
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    // optionally handle response
+    // console.log('Stroke saved', data);
+  })
+  .catch(console.error);
+}
+
+function fetchAndRenderStrokes() {
+  fetch('https://yourproject.mockapi.io/api/v1/draw')
+    .then(res => res.json())
+    .then(strokes => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height); // clear canvas
+      strokes.forEach(drawStrokeFromData);
+    })
+    .catch(console.error);
+}
+
+function update() {
+  color = document.getElementById('color').value;
+  requestAnimationFrame(update);
+}
+update();
+
+// Poll new strokes every 3 seconds to sync multiplayer
+setInterval(fetchAndRenderStrokes, 3000);
+</script>
+
+    </body>
+</html>
