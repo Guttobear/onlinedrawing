@@ -230,7 +230,7 @@ function draw() {
 }
 
 function sendStroke(x, y, tool, color, brushsize, strokeSeed) {
-  fetch('https://yourproject.mockapi.io/api/v1/draw', {
+  fetch('https://6839ed5e6561b8d882b2259b.mockapi.io/draw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -252,7 +252,7 @@ function sendStroke(x, y, tool, color, brushsize, strokeSeed) {
 }
 
 function fetchAndRenderStrokes() {
-  fetch('https://yourproject.mockapi.io/api/v1/draw')
+  fetch('https://6839ed5e6561b8d882b2259b.mockapi.io/draw')
     .then(res => res.json())
     .then(strokes => {
       ctx.clearRect(0, 0, canvas.width, canvas.height); // clear canvas
